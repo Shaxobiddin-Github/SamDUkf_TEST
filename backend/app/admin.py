@@ -46,4 +46,4 @@ class AnswerAdmin(admin.ModelAdmin):
 
 @admin.register(StudentTest)
 class StudentTestAdmin(admin.ModelAdmin):
-    list_display = ['id', 'student', 'test', 'completed_at']
+    list_display = ['id', 'student', 'test', 'is_completed', 'completed_at']

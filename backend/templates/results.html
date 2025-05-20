@@ -1,14 +1,30 @@
 {% extends 'base.html' %}
 {% block title %}Natijalar{% endblock %}
 {% block content %}
-    <h2>{{ test.title }} Natijalari</h2>
-    <p>Umumiy savollar: {{ total }}</p>
-    <p>To‘g‘ri javoblar: {{ correct }}</p>
-    <p>Foiz: {{ percentage }}%</p>
-    <ul>
-    {% for answer in answers %}
-        <li>{{ answer.question.text }}: Tanlangan: {{ answer.selected_option }} ({{ answer.is_correct|yesno:"To‘g‘ri,Noto‘g‘ri" }})</li>
-    {% endfor %}
-    </ul>
-    <a href="{% url 'test_list' %}">Testlar ro‘yxatiga qaytish</a>
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h2 class="mb-3 text-center">{{ test.title }} Natijalari</h2>
+                    <div class="mb-3">
+                        <span class="badge bg-primary fs-5">Umumiy savollar: {{ total }}</span>
+                        <span class="badge bg-success fs-5">To‘g‘ri javoblar: {{ correct }}</span>
+                        <span class="badge bg-info fs-5">Foiz: {{ percentage }}%</span>
+                    </div>
+                    <ul class="list-group mb-3">
+                    {% for answer in answers %}
+                        <li class="list-group-item">
+                            <b>{{ answer.question.text }}</b><br>
+                            Tanlangan: <span class="fw-bold">{{ answer.selected_option }}</span>
+                            <span class="ms-2">({{ answer.is_correct|yesno:"To‘g‘ri,Noto‘g‘ri" }})</span>
+                        </li>
+                    {% endfor %}
+                    </ul>
+                    <a href="{% url 'test_list' %}" class="btn btn-outline-secondary">Testlar ro‘yxatiga qaytish</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

@@ -6,6 +6,9 @@ from rest_framework.permissions import IsAuthenticated
 from django.utils.timezone import now
 from .models import StudentTest, Test, Question, Answer, Student
 from .serializers import TestListSerializer, TestDetailSerializer, AnswerSubmitSerializer, ResultSerializer
+import logging
+
+logger = logging.getLogger(__name__)
 
 class TestListView(generics.ListAPIView):
     queryset = Test.objects.all()
@@ -127,7 +130,7 @@ class RegisterStudentView(generics.CreateAPIView):
     permission_classes = [IsAuthenticated]  # optional: faqat o‘qituvchilar qo‘sha olsin
 
     def post(self, request, *args, **kwargs):
-        # Optional: faqat teacher foydalanuvchi qo‘sha oladi
+        # Optional: faqat teacher foydalanuchi qo‘sha oladi
         if not request.user.is_teacher:
             return Response({'error': 'Faqat o‘qituvchilar talaba qo‘sha oladi.'}, status=403)
         return super().post(request, *args, **kwargs)
@@ -345,7 +348,7 @@ def test_list_view(request):
 def test_detail_view(request, test_id):
     test = get_object_or_404(Test, id=test_id)
     student_test = StudentTest.objects.filter(student__user=request.user, test=test).first()
-    if not student_test or student_test.is_completed:
+    if not student_test or getattr(student_test, 'is_completed', False):
         return render(request, 'test_detail.html', {'test': test, 'error': 'Test boshlanmagan yoki tugallangan'})
     questions = Question.objects.filter(test=test)
     return render(request, 'test_detail.html', {'test': test, 'questions': questions, 'student_test': student_test})
@@ -353,22 +356,35 @@ def test_detail_view(request, test_id):
 # Testni boshlash
 @login_required
 def start_test_view(request, test_id):
+    logger.info(f"start_test_view: test_id={test_id}, user={request.user}")
     test = get_object_or_404(Test, id=test_id)
-    student = get_object_or_404(Student, user=request.user)
+    try:
+        student = Student.objects.get(user=request.user)
+        logger.info(f"Student found: {student}")
+    except Student.DoesNotExist:
+        logger.warning(f"Student not found for user {request.user}")
+        return redirect('test_list')
     if request.method == 'POST':
+        logger.info("POST so'rov: testni boshlash harakati")
         student_test, created = StudentTest.objects.get_or_create(
             student=student,
-            test=test,
-            defaults={
-                'start_time': timezone.now(),
-                'duration': timedelta(minutes=60),  # 1 soatlik test
-                'end_time': timezone.now() + timedelta(minutes=60)
-            }
+            test=test
         )
-        if not created and student_test.is_completed:
+        logger.info(f"StudentTest: {student_test}, created={created}")
+        if not created and getattr(student_test, 'is_completed', False):
+            logger.info("Test allaqachon tugallangan")
             return render(request, 'test_detail.html', {'test': test, 'error': 'Test allaqachon tugallangan'})
-        return redirect('test_detail', test_id=test_id)
-    return render(request, 'test_detail.html', {'test': test})
+        questions = Question.objects.filter(test=test)
+        return render(request, 'test_detail.html', {'test': test, 'questions': questions, 'student_test': student_test})
+    else:
+        logger.info("GET so'rov: testni boshlash sahifasi")
+        student_test = StudentTest.objects.filter(student=student, test=test).first()
+        if student_test and not getattr(student_test, 'is_completed', False):
+            logger.info("Test allaqachon boshlangan, test_detail sahifasiga o'tkaziladi")
+            questions = Question.objects.filter(test=test)
+            return render(request, 'test_detail.html', {'test': test, 'questions': questions, 'student_test': student_test})
+        logger.info("Test hali boshlanmagan, boshlash tugmasi ko'rsatiladi")
+        return render(request, 'test_detail.html', {'test': test, 'show_start_button': True})
 
 # Javob yuborish
 @login_required
@@ -376,25 +392,36 @@ def submit_answer_view(request, test_id):
     test = get_object_or_404(Test, id=test_id)
     student = get_object_or_404(Student, user=request.user)
     student_test = get_object_or_404(StudentTest, student=student, test=test)
-    if student_test.end_time < timezone.now():
-        return render(request, 'test_detail.html', {'test': test, 'error': 'Test vaqti tugagan'})
+    if test.end_time < timezone.now() or student_test.is_completed:
+        return render(request, 'test_detail.html', {'test': test, 'error': 'Test vaqti tugagan yoki yakunlangan'})
     if request.method == 'POST':
-        question_id = request.POST.get('question_id')
-        selected_option = request.POST.get('selected_option')
-        question = get_object_or_404(Question, id=question_id, test=test)
-        is_correct = selected_option.upper() == question.correct_option
-        Answer.objects.create(
-            student=student,
-            question=question,
-            selected_option=selected_option.upper(),
-            is_correct=is_correct
-        )
-        if 'finish' in request.POST:
+        questions = Question.objects.filter(test=test)
+        total = questions.count()
+        correct = 0
+        for question in questions:
+            selected_option = request.POST.get(f'selected_option_{question.id}')
+            if selected_option:
+                is_correct = selected_option.upper() == question.correct_option
+                Answer.objects.update_or_create(
+                    student=student,
+                    question=question,
+                    defaults={
+                        'selected_option': selected_option.upper(),
+                        'is_correct': is_correct
+                    }
+                )
+                if is_correct:
+                    correct += 1
+        if 'finish' in request.POST or test.end_time < timezone.now():
             student_test.is_completed = True
+            student_test.completed_at = timezone.now()
             student_test.save()
+            percentage = round(correct * 100 / total, 2) if total > 0 else 0
+            answers = Answer.objects.filter(student=student, question__test=test)
             return redirect('results', test_id=test_id)
         return redirect('test_detail', test_id=test_id)
-    return render(request, 'submit_answer.html', {'test': test})
+    questions = Question.objects.filter(test=test)
+    return render(request, 'test_detail.html', {'test': test, 'questions': questions, 'student_test': student_test})
 
 # Natijalar
 @login_required
@@ -464,4 +491,11 @@ def test_statistics_view(request, test_id):
         stats[student_id]['total'] += 1
         if answer.is_correct:
             stats[student_id]['correct'] += 1
+    # Foizni hisoblash
+    for student_id, data in stats.items():
+        data['percent'] = round((data['correct'] / data['total']) * 100, 2) if data['total'] > 0 else 0
     return render(request, 'teacher/statistics.html', {'test': test, 'stats': stats})
+
+# settings.py
+
+LOGIN_URL = '/login/'

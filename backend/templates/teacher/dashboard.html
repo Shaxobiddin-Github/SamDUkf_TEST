@@ -1,12 +1,25 @@
 {% extends 'base.html' %}
 {% block title %}O‘qituvchi Paneli{% endblock %}
 {% block content %}
-    <h2>O‘qituvchi Paneli</h2>
-    <a href="{% url 'upload_questions' %}">Savol yuklash</a>
-    <h3>Testlar</h3>
-    <ul>
-    {% for test in tests %}
-        <li>{{ test.title }} ({{ test.subject }}) - <a href="{% url 'test_statistics' test.id %}">Statistikani ko‘rish</a></li>
-    {% endfor %}
-    </ul>
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h2 class="mb-3 text-center">O‘qituvchi Paneli</h2>
+                    <a href="{% url 'upload_questions' %}" class="btn btn-primary mb-3">Savol yuklash</a>
+                    <h4>Testlar</h4>
+                    <ul class="list-group">
+                    {% for test in tests %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span><b>{{ test.title }}</b> <span class="text-muted">({{ test.subject }})</span></span>
+                            <a href="{% url 'test_statistics' test.id %}" class="btn btn-outline-info btn-sm">Statistikani ko‘rish</a>
+                        </li>
+                    {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

@@ -1,39 +1,133 @@
 {% extends 'base.html' %}
 {% block title %}{{ test.title }}{% endblock %}
 {% block content %}
-    <h2>{{ test.title }} - {{ test.subject }}</h2>
-    {% if error %}
-        <p style="color: red;">{{ error }}</p>
-    {% elif student_test %}
-        <p>Qolgan vaqt: <span id="timer"></span></p>
-        <form method="post" action="{% url 'submit_answer' test.id %}">
-            {% csrf_token %}
-            {% for question in questions %}
-                <p>{{ question.text }}</p>
-                <label><input type="radio" name="selected_option_{{ question.id }}" value="A"> {{ question.option_a }}</label><br>
-                <label><input type="radio" name="selected_option_{{ question.id }}" value="B"> {{ question.option_b }}</label><br>
-                <label><input type="radio" name="selected_option_{{ question.id }}" value="C"> {{ question.option_c }}</label><br>
-                <label><input type="radio" name="selected_option_{{ question.id }}" value="D"> {{ question.option_d }}</label><br>
-                <input type="hidden" name="question_id" value="{{ question.id }}">
-            {% endfor %}
-            <button type="submit" name="submit">Javob yuborish</button>
-            <button type="submit" name="finish">Testni yakunlash</button>
-        </form>
-        <script>
-            const endTime = new Date('{{ student_test.end_time|date:"c" }}').getTime();
-            function updateTimer() {
-                const now = new Date().getTime();
-                const timeLeft = endTime - now;
-                if (timeLeft <= 0) {
-                    document.getElementById('timer').innerText = 'Vaqt tugadi!';
-                    document.forms[0].submit();
-                } else {
-                    const minutes = Math.floor(timeLeft / 1000 / 60);
-                    const seconds = Math.floor((timeLeft / 1000) % 60);
-                    document.getElementById('timer').innerText = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-                }
-            }
-            setInterval(updateTimer, 1000);
-        </script>
-    {% endif %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h2 class="mb-3 text-center">{{ test.title }} <span class="text-muted">- {{ test.subject }}</span></h2>
+                    {% if error %}
+                        <div class="alert alert-danger">{{ error }}</div>
+                    {% elif show_start_button %}
+                        <form method="post" action="">
+                            {% csrf_token %}
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-primary btn-lg">Testni boshlash</button>
+                            </div>
+                        </form>
+                    {% elif student_test %}
+                        <div class="d-flex justify-content-between align-items-center mb-3 sticky-top bg-white py-2" style="z-index: 100;">
+                            <span class="badge bg-info fs-5">Qolgan vaqt: <span id="timer"></span></span>
+                        </div>
+                        <form method="post" action="{% url 'submit_answer' test.id %}" id="test-form">
+                            {% csrf_token %}
+                            {% for question in questions %}
+                                <div class="card mb-4 border-primary">
+                                    <div class="card-header bg-primary text-white">
+                                        <b>{{ forloop.counter }}-savol.</b> {{ question.text }}
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="form-check">
+                                            <input class="form-check-input answer-radio" type="radio" name="selected_option_{{ question.id }}" value="A" id="q{{ question.id }}A">
+                                            <label class="form-check-label" for="q{{ question.id }}A">{{ question.option_a }}</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input answer-radio" type="radio" name="selected_option_{{ question.id }}" value="B" id="q{{ question.id }}B">
+                                            <label class="form-check-label" for="q{{ question.id }}B">{{ question.option_b }}</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input answer-radio" type="radio" name="selected_option_{{ question.id }}" value="C" id="q{{ question.id }}C">
+                                            <label class="form-check-label" for="q{{ question.id }}C">{{ question.option_c }}</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input answer-radio" type="radio" name="selected_option_{{ question.id }}" value="D" id="q{{ question.id }}D">
+                                            <label class="form-check-label" for="q{{ question.id }}D">{{ question.option_d }}</label>
+                                        </div>
+                                        <input type="hidden" name="question_id" value="{{ question.id }}">
+                                    </div>
+                                </div>
+                            {% endfor %}
+                            <div class="d-grid gap-2">
+                                <button type="submit" name="finish" class="btn btn-success btn-lg">Testni yakunlash va natijani ko‘rish</button>
+                            </div>
+                        </form>
+                        <!-- Modal for time up -->
+                        <div class="modal fade" id="timeUpModal" tabindex="-1" aria-labelledby="timeUpModalLabel" aria-hidden="true">
+                          <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                              <div class="modal-header">
+                                <h5 class="modal-title" id="timeUpModalLabel">Vaqt tugadi</h5>
+                              </div>
+                              <div class="modal-body">
+                                Test vaqti tugadi. Javoblaringiz yuborildi.
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <script>
+                            // 1. 30 daqiqa taymer va localStorage
+                            const TEST_KEY = 'test_start_time_{{ student_test.id }}';
+                            let startTime = localStorage.getItem(TEST_KEY);
+                            if (!startTime) {
+                                startTime = new Date().getTime();
+                                localStorage.setItem(TEST_KEY, startTime);
+                            } else {
+                                startTime = parseInt(startTime);
+                            }
+                            const duration = 30 * 60 * 1000; // 30 daqiqa
+                            const endTime = startTime + duration;
+                            // 2. Javoblarni localStorage ga vaqtinchalik saqlash
+                            const ANSWERS_KEY = 'test_answers_{{ student_test.id }}';
+                            document.querySelectorAll('.answer-radio').forEach(radio => {
+                                radio.addEventListener('change', function() {
+                                    let answers = JSON.parse(localStorage.getItem(ANSWERS_KEY) || '{}');
+                                    const qid = this.name.replace('selected_option_', '');
+                                    answers[qid] = this.value;
+                                    localStorage.setItem(ANSWERS_KEY, JSON.stringify(answers));
+                                });
+                            });
+                            // Sahifa yuklanganda localStorage dan javoblarni tiklash
+                            window.addEventListener('DOMContentLoaded', function() {
+                                let answers = JSON.parse(localStorage.getItem(ANSWERS_KEY) || '{}');
+                                for (const [qid, val] of Object.entries(answers)) {
+                                    const radio = document.getElementById(`q${qid}${val}`);
+                                    if (radio) radio.checked = true;
+                                }
+                            });
+                            // 3. Vaqt tugaganda modal va avtomatik submit
+                            function updateTimer() {
+                                const now = new Date().getTime();
+                                const timeLeft = endTime - now;
+                                if (timeLeft <= 0) {
+                                    document.getElementById('timer').innerText = 'Vaqt tugadi!';
+                                    localStorage.removeItem(TEST_KEY);
+                                    // Modalni ko‘rsatish
+                                    var modal = new bootstrap.Modal(document.getElementById('timeUpModal'));
+                                    modal.show();
+                                    // Formani yuborish va javoblarni tozalash
+                                    setTimeout(function() {
+                                        localStorage.removeItem(ANSWERS_KEY);
+                                        document.getElementById('test-form').submit();
+                                    }, 2000);
+                                } else {
+                                    const minutes = Math.floor(timeLeft / 1000 / 60);
+                                    const seconds = Math.floor((timeLeft / 1000) % 60);
+                                    document.getElementById('timer').innerText = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+                                }
+                            }
+                            updateTimer();
+                            setInterval(updateTimer, 1000);
+                            // Sahifa yangilansa ham javoblar saqlanadi, yakunlanganda tozalanadi
+                            document.getElementById('test-form').addEventListener('submit', function() {
+                                localStorage.removeItem(ANSWERS_KEY);
+                                localStorage.removeItem(TEST_KEY);
+                            });
+                        </script>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

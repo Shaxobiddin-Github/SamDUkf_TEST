@@ -25,7 +25,12 @@ SECRET_KEY = 'django-insecure-x4&8-f1#-d!6sj!do(-y)jfs85cfd^^ggfn0y)=0uy_f7i#(12
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8000',
+    'https://localhost:8000',
+]
 
 
 # Application definition
@@ -162,3 +167,5 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': False,
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
+LOGIN_URL = '/login/'

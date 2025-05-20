@@ -1,6 +1,6 @@
 from django.db import models
 
-# Create your models here.
+
 # core/models.py
 
 from django.db import models
@@ -86,7 +86,8 @@ class Answer(models.Model):
 class StudentTest(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
     test = models.ForeignKey(Test, on_delete=models.CASCADE)
-    completed_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    is_completed = models.BooleanField(default=False)
 
     class Meta:
         unique_together = ('student', 'test')
