@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}Javob Yuborish{% endblock %}
+{% block content %}
+    <h2>{{ test.title }} - Javob Yuborish</h2>
+
+    {% if error %}
+        <p style="color: red;">{{ error }}</p>
+    {% endif %}
+
+    <form method="post" action="{% url 'submit_answer' test.id %}">
+        {% csrf_token %}
+        <div>
+            <label for="question_id">Savolni tanlang:</label>
+            <select name="question_id" id="question_id" required>
+                <option value="">-- Savolni tanlang --</option>
+                {% for question in test.question_set.all %}
+                    <option value="{{ question.id }}">{{ question.text|truncatewords:10 }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label>Javob varianti:</label><br>
+            <input type="radio" name="selected_option" value="A" id="option_a" required>
+            <label for="option_a">A</label><br>
+            <input type="radio" name="selected_option" value="B" id="option_b">
+            <label for="option_b">B</label><br>
+            <input type="radio" name="selected_option" value="C" id="option_c">
+            <label for="option_c">C</label><br>
+            <input type="radio" name="selected_option" value="D" id="option_d">
+            <label for="option_d">D</label>
+        </div>
+        <div style="margin-top: 20px;">
+            <button type="submit" name="next" value="next">Keyingi savol</button>
+            <button type="submit" name="finish" value="finish">Testni yakunlash</button>
+        </div>
+    </form>
+
+    <p><a href="{% url 'test_detail' test.id %}">Test sahifasiga qaytish</a></p>
+{% endblock %}

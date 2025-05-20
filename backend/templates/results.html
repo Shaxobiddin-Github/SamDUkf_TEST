@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}Natijalar{% endblock %}
+{% block content %}
+    <h2>{{ test.title }} Natijalari</h2>
+    <p>Umumiy savollar: {{ total }}</p>
+    <p>To‘g‘ri javoblar: {{ correct }}</p>
+    <p>Foiz: {{ percentage }}%</p>
+    <ul>
+    {% for answer in answers %}
+        <li>{{ answer.question.text }}: Tanlangan: {{ answer.selected_option }} ({{ answer.is_correct|yesno:"To‘g‘ri,Noto‘g‘ri" }})</li>
+    {% endfor %}
+    </ul>
+    <a href="{% url 'test_list' %}">Testlar ro‘yxatiga qaytish</a>
+{% endblock %}

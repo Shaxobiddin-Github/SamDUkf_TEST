@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block title %}O‘qituvchi Paneli{% endblock %}
+{% block content %}
+    <h2>O‘qituvchi Paneli</h2>
+    <a href="{% url 'upload_questions' %}">Savol yuklash</a>
+    <h3>Testlar</h3>
+    <ul>
+    {% for test in tests %}
+        <li>{{ test.title }} ({{ test.subject }}) - <a href="{% url 'test_statistics' test.id %}">Statistikani ko‘rish</a></li>
+    {% endfor %}
+    </ul>
+{% endblock %}

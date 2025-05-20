@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}Testlar Ro‘yxati{% endblock %}
+{% block content %}
+    <h2>Mavjud Testlar</h2>
+    {% if tests %}
+        <ul>
+        {% for test in tests %}
+            <li>{{ test.title }} ({{ test.subject }}) - <a href="{% url 'start_test' test.id %}">Boshlash</a></li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>Hozirda testlar mavjud emas.</p>
+    {% endif %}
+{% endblock %}

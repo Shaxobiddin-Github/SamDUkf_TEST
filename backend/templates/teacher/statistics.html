@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}Test Statistikasi{% endblock %}
+{% block content %}
+    <h2>{{ test.title }} Statistikasi</h2>
+    <table border="1">
+        <tr>
+            <th>Talaba ID</th>
+            <th>To‘g‘ri javoblar</th>
+            <th>Umumiy savollar</th>
+            <th>Foiz</th>
+        </tr>
+        {% for student_id, data in stats.items %}
+            <tr>
+                <td>{{ student_id }}</td>
+                <td>{{ data.correct }}</td>
+                <td>{{ data.total }}</td>
+                <td>{{ data.correct|floatformat:2|div:data.total|mul:100 }}%</td>
+            </tr>
+        {% endfor %}
+    </table>
+    <a href="{% url 'teacher_dashboard' %}">Orqaga</a>
+{% endblock %}
