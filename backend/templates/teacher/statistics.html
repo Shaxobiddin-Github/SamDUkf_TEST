@@ -1,5 +1,10 @@
 {% extends 'base.html' %}
 {% block title %}Test Statistikasi{% endblock %}
+{% block global_search %}
+<div class="mb-3">
+  <input type="text" id="searchInput" class="form-control" onkeyup="filterTable('searchInput', 'mainTable')" placeholder="Qidirish...">
+</div>
+{% endblock %}
 {% block content %}
 <div class="container mt-4">
     <div class="row justify-content-center">
@@ -7,7 +12,7 @@
             <div class="card shadow">
                 <div class="card-body">
                     <h2 class="mb-3 text-center">{{ test.title }} Statistikasi</h2>
-                    <table class="table table-bordered table-striped">
+                    <table class="table table-bordered table-striped" id="mainTable">
                         <thead class="table-primary">
                             <tr>
                                 <th>Talaba ID</th>
@@ -27,6 +32,7 @@
                         {% endfor %}
                         </tbody>
                     </table>
+                    {% block pagination %}{% endblock %}
                     <a href="{% url 'teacher_dashboard' %}" class="btn btn-outline-secondary">Orqaga</a>
                 </div>
             </div>

@@ -4,314 +4,16 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils.timezone import now
-from .models import StudentTest, Test, Question, Answer, Student
+from .models import StudentTest, Test, Question, Answer, Student, User, Faculty, University
 from .serializers import TestListSerializer, TestDetailSerializer, AnswerSubmitSerializer, ResultSerializer
 import logging
+import openpyxl
 
 logger = logging.getLogger(__name__)
 
-class TestListView(generics.ListAPIView):
-    queryset = Test.objects.all()
-    serializer_class = TestListSerializer
-    permission_classes = [IsAuthenticated]
-
-class TestDetailView(generics.RetrieveAPIView):
-    queryset = Test.objects.all()
-    serializer_class = TestDetailSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, *args, **kwargs):
-        test = self.get_object()
-        if test.start_time > now() or test.end_time < now():
-            return Response({'error': 'Test is not available at this time.'}, status=403)
-        return super().get(request, *args, **kwargs)
-
-class SubmitAnswersView(generics.GenericAPIView):
-    serializer_class = AnswerSubmitSerializer
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, *args, **kwargs):
-        student = Student.objects.get(user=request.user)
-        question_ids = []
-        correct = 0
-        detailed_result = []
-        
-        for ans_data in request.data.get('answers', []):
-            serializer = self.get_serializer(data=ans_data)
-            serializer.is_valid(raise_exception=True)
-            question = Question.objects.get(id=serializer.validated_data['question_id'])
-            selected = serializer.validated_data['selected_option'].upper()
-            is_correct = selected == question.correct_option
-
-            Answer.objects.create(
-                student=student,
-                question=question,
-                selected_option=selected,
-                is_correct=is_correct
-            )
-            question_ids.append(question.id)
-            correct += 1 if is_correct else 0
-            detailed_result.append({
-                "question": question.text,
-                "selected": selected,
-                "correct": question.correct_option,
-                "is_correct": is_correct
-            })
-
-        total = len(question_ids)
-        return Response({
-            "test_id": question.test.id,
-            "total_questions": total,
-            "correct_answers": correct,
-            "percentage": round(correct * 100 / total, 2),
-            "detailed": detailed_result
-        }, status=200)
-
-
-
-
-
-
-
-# --------------EXCEL FILE dan savollarni yuklash-------------------------
-
-
-
-# core/views.py davomiga
-
-from rest_framework.parsers import MultiPartParser
-import openpyxl
-from .models import Test, Question
-
-class UploadQuestionsFromExcelView(generics.GenericAPIView):
-    parser_classes = [MultiPartParser]
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, *args, **kwargs):
-        file = request.FILES.get('file')
-        test_id = request.POST.get('test_id')
-
-        if not file or not test_id:
-            return Response({'error': 'Fayl va test_id kerak.'}, status=400)
-
-        try:
-            test = Test.objects.get(id=test_id)
-        except Test.DoesNotExist:
-            return Response({'error': 'Test topilmadi.'}, status=404)
-
-        wb = openpyxl.load_workbook(file)
-        sheet = wb.active
-
-        for row in sheet.iter_rows(min_row=2, values_only=True):
-            Question.objects.create(
-                test=test,
-                text=row[0],
-                option_a=row[1],
-                option_b=row[2],
-                option_c=row[3],
-                option_d=row[4],
-                correct_option=row[5].upper()
-            )
-
-        return Response({'success': 'Savollar muvaffaqiyatli yuklandi!'}, status=201)
-
-
-
-# ------------------Foydalanuvchilarni qushish ----------------------
-
-
-
-# core/views.py
-
-from .serializers import RegisterStudentSerializer
-
-class RegisterStudentView(generics.CreateAPIView):
-    serializer_class = RegisterStudentSerializer
-    permission_classes = [IsAuthenticated]  # optional: faqat o‘qituvchilar qo‘sha olsin
-
-    def post(self, request, *args, **kwargs):
-        # Optional: faqat teacher foydalanuchi qo‘sha oladi
-        if not request.user.is_teacher:
-            return Response({'error': 'Faqat o‘qituvchilar talaba qo‘sha oladi.'}, status=403)
-        return super().post(request, *args, **kwargs)
-
-
-
-
-
-# -------------------------STATISTIKA------------------------------
-
-
-
-
-# core/views.py
-
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from .models import Test, Answer, Question
-from django.contrib.auth import get_user_model
-
-User = get_user_model()
-
-class TestStatisticsView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, test_id):
-        if not request.user.is_teacher:
-            return Response({'error': 'Faqat o‘qituvchilar kirishi mumkin'}, status=403)
-
-        try:
-            test = Test.objects.get(id=test_id, teacher=request.user)
-        except Test.DoesNotExist:
-            return Response({'error': 'Test topilmadi'}, status=404)
-
-        all_questions = Question.objects.filter(test=test)
-        total_questions = all_questions.count()
-
-        answers = Answer.objects.filter(question__in=all_questions).select_related('student', 'question')
-        student_stats = {}
-
-        for ans in answers:
-            sid = ans.student.id
-            if sid not in student_stats:
-                student_stats[sid] = {
-                    'student_name': f"{ans.student.user.first_name} {ans.student.user.last_name}",
-                    'correct': 0,
-                    'wrong': 0,
-                }
-            correct_option = ans.question.correct_option.upper()
-            if ans.selected_option.upper() == correct_option:
-                student_stats[sid]['correct'] += 1
-            else:
-                student_stats[sid]['wrong'] += 1
-
-        # Jadvalga aylantirish
-        result = []
-        for sid, stat in student_stats.items():
-            total = stat['correct'] + stat['wrong']
-            result.append({
-                'student': stat['student_name'],
-                'correct': stat['correct'],
-                'wrong': stat['wrong'],
-                'score_percent': round((stat['correct'] / total_questions) * 100, 2)
-            })
-
-        return Response({'test': test.title, 'total_questions': total_questions, 'results': result})
-
-
-
-# ------------------------TIME-----------------------------
-
-
-
-
-# core/views.py
-
-from django.utils import timezone
-from rest_framework import status
-
-class StartTestView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, test_id):
-        try:
-            test = Test.objects.get(id=test_id)
-        except Test.DoesNotExist:
-            return Response({'error': 'Test topilmadi'}, status=status.HTTP_404_NOT_FOUND)
-
-        now = timezone.now()
-        if test.start_time and now < test.start_time:
-            return Response({'error': 'Test hali boshlanmadi'}, status=status.HTTP_403_FORBIDDEN)
-
-        if test.end_time and now > test.end_time:
-            return Response({'error': 'Test vaqti tugagan'}, status=status.HTTP_403_FORBIDDEN)
-
-        # Agar boshlash uchun maxsus logika bo‘lsa, shu yerda yozamiz
-
-        return Response({'message': 'Test boshlash mumkin'}, status=status.HTTP_200_OK)
-
-
-
-
-
-
-
-
-
-
-
-
-# core/views.py
-
-class SubmitAnswerView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, test_id):
-        user = request.user
-        try:
-            test = Test.objects.get(id=test_id)
-        except Test.DoesNotExist:
-            return Response({'error': 'Test topilmadi'}, status=404)
-
-        question_id = request.data.get('question_id')
-        selected_option = request.data.get('selected_option')
-
-        try:
-            question = Question.objects.get(id=question_id, test=test)
-        except Question.DoesNotExist:
-            return Response({'error': 'Savol topilmadi'}, status=404)
-
-        # Test vaqti tekshiruvi
-        now = timezone.now()
-        if test.start_time and now < test.start_time:
-            return Response({'error': 'Test hali boshlanmadi'}, status=403)
-        if test.end_time and now > test.end_time:
-            return Response({'error': 'Test vaqti tugagan'}, status=403)
-
-        correct = question.correct_option.upper() == selected_option.upper()
-
-        answer, created = Answer.objects.update_or_create(
-            student=user.student,
-            question=question,
-            defaults={'selected_option': selected_option, 'is_correct': correct}
-        )
-
-        return Response({'correct': correct})
-
-
-
-
-
-
-
-
-
-
-# core/views.py
-
-class FinishTestView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, test_id):
-        user = request.user
-        try:
-            test = Test.objects.get(id=test_id)
-        except Test.DoesNotExist:
-            return Response({'error': 'Test topilmadi'}, status=404)
-
-        # Tekshiramiz, agar talaba allaqachon testni topshirgan bo‘lsa
-        if StudentTest.objects.filter(student=user.student, test=test).exists():
-            return Response({'error': 'Siz bu testni allaqachon topshirdingiz'}, status=403)
-
-        # Test yakunlandi deb belgilaymiz
-        StudentTest.objects.create(student=user.student, test=test)
-
-        return Response({'message': 'Test muvaffaqiyatli yakunlandi'})
-
+# DRF (REST API) viewlar endi api_views.py faylida. Bu faylda faqat template-based (render, redirect) viewlar qoldi.
 
 # --------------------------TEMPLATES---------------------------
-
-
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
@@ -319,6 +21,9 @@ from django.contrib.auth.decorators import login_required
 from .models import Test, Question, StudentTest, Answer
 from datetime import datetime, timedelta
 from django.utils import timezone
+from .forms import AddStudentForm
+import random
+from django.core.paginator import Paginator
 
 # Login sahifasi
 def login_view(request):
@@ -340,7 +45,14 @@ def login_view(request):
 def test_list_view(request):
     if not request.user.is_student:
         return redirect('teacher_dashboard')
-    tests = Test.objects.filter(start_time__lte=timezone.now(), end_time__gte=timezone.now())
+    student = Student.objects.filter(user=request.user).first()
+    if not student:
+        return render(request, 'test_list.html', {'tests': []})
+    tests = Test.objects.filter(
+        start_time__lte=timezone.now(),
+        end_time__gte=timezone.now(),
+        group=student.group
+    )
     return render(request, 'test_list.html', {'tests': tests})
 
 # Test detallari
@@ -348,7 +60,7 @@ def test_list_view(request):
 def test_detail_view(request, test_id):
     test = get_object_or_404(Test, id=test_id)
     student_test = StudentTest.objects.filter(student__user=request.user, test=test).first()
-    if not student_test or getattr(student_test, 'is_completed', False):
+    if not student_test or (student_test.is_completed if student_test else False):
         return render(request, 'test_detail.html', {'test': test, 'error': 'Test boshlanmagan yoki tugallangan'})
     questions = Question.objects.filter(test=test)
     return render(request, 'test_detail.html', {'test': test, 'questions': questions, 'student_test': student_test})
@@ -371,7 +83,7 @@ def start_test_view(request, test_id):
             test=test
         )
         logger.info(f"StudentTest: {student_test}, created={created}")
-        if not created and getattr(student_test, 'is_completed', False):
+        if not created and (student_test.is_completed if student_test else False):
             logger.info("Test allaqachon tugallangan")
             return render(request, 'test_detail.html', {'test': test, 'error': 'Test allaqachon tugallangan'})
         questions = Question.objects.filter(test=test)
@@ -379,7 +91,7 @@ def start_test_view(request, test_id):
     else:
         logger.info("GET so'rov: testni boshlash sahifasi")
         student_test = StudentTest.objects.filter(student=student, test=test).first()
-        if student_test and not getattr(student_test, 'is_completed', False):
+        if student_test and not student_test.is_completed:
             logger.info("Test allaqachon boshlangan, test_detail sahifasiga o'tkaziladi")
             questions = Question.objects.filter(test=test)
             return render(request, 'test_detail.html', {'test': test, 'questions': questions, 'student_test': student_test})
@@ -440,7 +152,10 @@ def teacher_dashboard_view(request):
     if not request.user.is_teacher:
         return redirect('test_list')
     tests = Test.objects.filter(created_by=request.user)
-    return render(request, 'teacher/dashboard.html', {'tests': tests})
+    paginator = Paginator(tests, 8)  # 8 ta test har bir sahifada
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    return render(request, 'teacher/dashboard.html', {'tests': page_obj, 'page_obj': page_obj})
 
 # Savol yuklash
 @login_required
@@ -449,10 +164,24 @@ def upload_questions_view(request):
         return redirect('test_list')
     if request.method == 'POST':
         file = request.FILES.get('file')
-        test_id = request.POST.get('test_id')
-        if file and test_id:
+        test_title = request.POST.get('test_title')
+        test_subject = request.POST.get('test_subject')
+        start_time = request.POST.get('start_time')
+        end_time = request.POST.get('end_time')
+        if file and test_title and test_subject and start_time and end_time:
+            group = request.POST.get('group')
+            import openpyxl
+            from django.utils.dateparse import parse_datetime
             try:
-                test = Test.objects.get(id=test_id, created_by=request.user)
+                # Test yaratish
+                test = Test.objects.create(
+                    title=test_title,
+                    subject=test_subject,
+                    created_by=request.user,
+                    start_time=parse_datetime(start_time),
+                    end_time=parse_datetime(end_time),
+                    group=group
+                )
                 wb = openpyxl.load_workbook(file)
                 sheet = wb.active
                 for row in sheet.iter_rows(min_row=2, values_only=True):
@@ -467,14 +196,11 @@ def upload_questions_view(request):
                         option_d=row[4],
                         correct_option=row[5].upper()
                     )
-                return render(request, 'teacher/upload_questions.html', {'success': 'Savollar muvaffaqiyatli yuklandi!'})
-            except Test.DoesNotExist:
-                return render(request, 'teacher/upload_questions.html', {'error': 'Test topilmadi'})
+                return render(request, 'teacher/upload_questions.html', {'success': 'Test va savollar muvaffaqiyatli yaratildi!'})
             except Exception as e:
                 return render(request, 'teacher/upload_questions.html', {'error': f'Faylni o‘qishda xato: {str(e)}'})
-        return render(request, 'teacher/upload_questions.html', {'error': 'Fayl va test_id kerak'})
-    tests = Test.objects.filter(created_by=request.user)
-    return render(request, 'teacher/upload_questions.html', {'tests': tests})
+        return render(request, 'teacher/upload_questions.html', {'error': 'Barcha maydonlarni to‘ldiring va fayl tanlang!'})
+    return render(request, 'teacher/upload_questions.html')
 
 # Test statistikasi
 @login_required
@@ -496,6 +222,43 @@ def test_statistics_view(request, test_id):
         data['percent'] = round((data['correct'] / data['total']) * 100, 2) if data['total'] > 0 else 0
     return render(request, 'teacher/statistics.html', {'test': test, 'stats': stats})
 
-# settings.py
+# Talabalar ro'yxati va qo'shish (faqat o'qituvchilar uchun)
+@login_required
+def student_list_view(request):
+    if not request.user.is_teacher:
+        return redirect('test_list')
+    students = Student.objects.filter(faculty__in=Faculty.objects.filter(university__in=University.objects.all()), user__is_student=True)
+    paginator = Paginator(students, 10)  # 10 ta student har bir sahifada
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    return render(request, 'teacher/student_list.html', {'students': page_obj, 'page_obj': page_obj})
 
-LOGIN_URL = '/login/'
+@login_required
+def add_student_view(request):
+    if not request.user.is_teacher:
+        return redirect('test_list')
+    if request.method == 'POST':
+        form = AddStudentForm(request.POST)
+        if form.is_valid():
+            # Student ID generatsiya
+            student_id = str(random.randint(100000, 999999))
+            # User yaratish (parol student_id, username ismi bilan bir xil)
+            user = User.objects.create_user(
+                username=form.cleaned_data['first_name'],
+                first_name=form.cleaned_data['first_name'],
+                last_name=form.cleaned_data['last_name'],
+                is_student=True,
+                password=student_id
+            )
+            # Student yaratish
+            Student.objects.create(
+                user=user,
+                student_id=student_id,
+                faculty=form.cleaned_data['faculty'],
+                course=form.cleaned_data.get('course', ''),
+                group=form.cleaned_data.get('group', '')
+            )
+            return redirect('student_list')
+    else:
+        form = AddStudentForm()
+    return render(request, 'teacher/add_student.html', {'form': form})

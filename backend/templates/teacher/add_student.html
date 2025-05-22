@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block title %}Yangi talaba qo'shish{% endblock %}
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-7 col-lg-6">
+            <div class="card shadow-lg border-0 bg-white bg-opacity-75" style="backdrop-filter: blur(2px);">
+                <div class="card-body p-4">
+                    <h2 class="mb-4 text-center text-primary">Yangi talaba qo'shish</h2>
+                    <form method="post" autocomplete="off">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="id_first_name" class="form-label">Ismi</label>
+                            <input type="text" name="first_name" class="form-control form-control-lg" id="id_first_name" placeholder="Talaba ismi" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_last_name" class="form-label">Familiyasi</label>
+                            <input type="text" name="last_name" class="form-control form-control-lg" id="id_last_name" placeholder="Talaba familiyasi" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_faculty" class="form-label">Fakultet</label>
+                            <select name="faculty" class="form-select form-select-lg" id="id_faculty" required>
+                                {% for faculty in form.fields.faculty.queryset %}
+                                    <option value="{{ faculty.id }}">{{ faculty.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_course" class="form-label">Kurs</label>
+                            <input type="text" name="course" class="form-control form-control-lg" id="id_course" placeholder="Talaba kursi">
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_group" class="form-label">Guruh</label>
+                            <input type="text" name="group" class="form-control form-control-lg" id="id_group" placeholder="Talaba guruhi" required>
+                        </div>
+                        <button type="submit" class="btn btn-gradient-primary w-100 py-2 mt-2">Qo'shish</button>
+                        <a href="{% url 'student_list' %}" class="btn btn-outline-secondary w-100 mt-2">Orqaga</a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_css %}
+<style>
+.btn-gradient-primary {
+    background: linear-gradient(90deg, #007bff 0%, #00c6ff 100%);
+    color: #fff;
+    border: none;
+    font-weight: 600;
+    transition: box-shadow 0.2s;
+}
+.btn-gradient-primary:hover {
+    box-shadow: 0 4px 16px rgba(0,123,255,0.2);
+    color: #fff;
+}
+.card {
+    border-radius: 18px;
+    background: rgba(255,255,255,0.85) !important;
+    box-shadow: 0 8px 32px 0 rgba(31,38,135,0.10);
+    z-index: 2;
+}
+</style>
+{% endblock %}
