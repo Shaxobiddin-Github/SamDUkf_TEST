@@ -98,6 +98,38 @@
             trs[i].style.display = show ? '' : 'none';
         }
     }
+
+    // Universal WebSocket connection for all pages
+    window.ws = null;
+    function connectWebSocket() {
+        if (window.ws && window.ws.readyState === 1) return;
+        let ws_scheme = window.location.protocol === "https:" ? "wss" : "ws";
+        let ws_path = ws_scheme + '://' + window.location.host + '/ws/notify/';
+        window.ws = new WebSocket(ws_path);
+        window.ws.onopen = function() {
+            console.log('WebSocket connected!');
+        };
+        window.ws.onmessage = function(e) {
+            try {
+                const data = JSON.parse(e.data);
+                if (data.message) {
+                    showWebSocketToast(data.message);
+                }
+            } catch (err) { console.log(e.data); }
+        };
+        window.ws.onclose = function() {
+            setTimeout(connectWebSocket, 2000); // auto-reconnect
+        };
+    }
+    function showWebSocketToast(msg) {
+        let toast = document.createElement('div');
+        toast.className = 'alert alert-info position-fixed top-0 end-0 m-3 shadow';
+        toast.style.zIndex = 2000;
+        toast.innerText = msg;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 4000);
+    }
+    connectWebSocket();
     </script>
 </body>
 </html>
